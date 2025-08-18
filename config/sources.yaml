@@ -1,0 +1,248 @@
+defaults:
+  last_week_only: true
+  same_host_only: true
+  preferred_lang: "en"
+  max_links: 12
+  pdf_chase: true
+  allow_substr: []
+  deny_substr:
+    - "/page-not-found"
+    - "/404"
+    - "/fr/"
+    - "/de/"
+    - "/es/"
+    - "/it/"
+    - "/pt/"
+    - "/bg/"
+    - "/pl/"
+    - "/ru/"
+    - "/nl/"
+    - "/cs/"
+    - "/da/"
+    - "/fi/"
+    - "/sv/"
+    - "/ro/"
+    - "/sk/"
+    - "/sl/"
+    - "/lt/"
+    - "/lv/"
+    - "/et/"
+    - "/el/"
+    - "/hu/"
+    - "/ga/"
+    - "/mt/"
+
+sources:
+  # NIST – AI topic page: raise limit so latest links are not clipped by nav links
+  - name: "NIST — AI Topic News/Updates"
+    type: "html"
+    url: "https://www.nist.gov/news-events/news-updates/topic/2753736"
+    region: "US"
+    tags: ["NIST", "AI", "News"]
+    allow_substr:
+      - "/news-events/news/"
+    deny_substr:
+      - "/events/"
+      - "/publications/"
+      - "/video"
+      - "/podcast"
+      - "/subscribe"
+    max_links: 80
+
+  # ArtificialIntelligenceAct.eu — start from Developments list (chronological)
+  - name: "ArtificialIntelligenceAct.eu — Developments"
+    type: "html"
+    url: "https://artificialintelligenceact.eu/developments/"
+    region: "EU"
+    tags: ["EU AI Act", "Tracker"]
+    # Allow generic article slugs; filter out static sections so posts like
+    # /whistleblowing-and-the-eu-ai-act/ make it through.
+    deny_substr:
+      - "/privacy"
+      - "/cookie"
+      - "/about"
+      - "/contact"
+      - "/documents/"
+      - "/context/"
+      - "/the-act/"
+      - "/ai-act-explorer/"
+      - "/high-level-summary/"
+      - "/assessment/"
+      - "/responsibilities-"
+      - "/implementation-"
+      - "/national-implementation"
+      - "/why-work-"
+      - "/the-ai-office-"
+      - "/small-businesses-guide-"
+    fallback_urls:
+      - "https://artificialintelligenceact.eu/"
+    max_links: 60
+
+  - name: "AI Verify Foundation — News"
+    type: "html"
+    url: "https://aiverifyfoundation.sg/news/"
+    region: "Singapore"
+    tags: ["Singapore", "AI Verify"]
+    allow_substr: ["/news/"]
+    deny_substr: ["/news-and-events/"]
+    max_links: 12
+
+  - name: "CEN-CENELEC — News (AI sector filter)"
+    type: "html"
+    url: "https://www.cencenelec.eu/news-events/news/?Sectors[]=6737"
+    region: "EU"
+    tags: ["CEN", "CENELEC", "AI", "Standards"]
+    allow_substr: ["/news-events/news/"]
+    max_links: 15
+
+  - name: "Council of Europe — AI Newsroom"
+    type: "html"
+    url: "https://www.coe.int/en/web/artificial-intelligence/newsroom"
+    region: "Europe"
+    tags: ["Council of Europe", "CETS225"]
+    allow_substr:
+      - "/en/web/artificial-intelligence/-/"
+      - "/en/web/portal/-/"
+    deny_substr: ["/fr/", "/de/", "/es/"]
+    fallback_urls:
+      - "https://www.coe.int/en/web/artificial-intelligence"
+      - "https://www.coe.int/en/web/portal/search?p_p_id=3&p_p_state=maximized&_3_groupId=10180&_3_scope=content&_3_keywords=artificial%20intelligence"
+    max_links: 12
+
+  - name: "ENISA — News"
+    type: "html"
+    url: "https://www.enisa.europa.eu/news"
+    region: "EU"
+    tags: ["ENISA", "Cybersecurity"]
+    allow_substr: ["/news/"]
+    max_links: 12
+
+  - name: "EDPS — Press News (EN)"
+    type: "html"
+    url: "https://www.edps.europa.eu/press-publications/press-news_en"
+    region: "EU"
+    tags: ["EDPS", "Data Protection"]
+    allow_substr: ["/press-publications/press-news/"]
+    max_links: 12
+
+  - name: "EDPB — News (EN)"
+    type: "html"
+    url: "https://www.edpb.europa.eu/news/news_en"
+    region: "EU"
+    tags: ["EDPB", "Data Protection"]
+    allow_substr: ["/news/"]
+    max_links: 12
+
+  - name: "European Parliament — OEIL (EN)"
+    type: "html"
+    url: "https://oeil.secure.europarl.europa.eu/oeil/en"
+    region: "EU"
+    tags: ["EU", "Parliament", "Legislation"]
+    allow_substr:
+      - "/oeil/en/legislative/"
+      - "/oeil/en/document/"
+      - "/oeil/en/search"
+    max_links: 10
+
+  - name: "European Commission — Digital Strategy (News)"
+    type: "html"
+    url: "https://digital-strategy.ec.europa.eu/en/news"
+    region: "EU"
+    tags: ["EU", "AI Act", "Commission", "News"]
+    allow_substr: ["/en/news/"]
+    deny_substr: ["/en/page-not-found"]
+    max_links: 20
+
+  - name: "European Commission — Digital Strategy (Related, topic=119)"
+    type: "html"
+    url: "https://digital-strategy.ec.europa.eu/en/related-content?topic=119"
+    region: "EU"
+    tags: ["EU", "AI Act", "Commission", "Topic119"]
+    allow_substr:
+      - "/en/news/"
+      - "/en/policies/"
+    deny_substr: ["/en/page-not-found"]
+    max_links: 20
+
+  - name: "UN News — Artificial Intelligence (EN)"
+    type: "html"
+    url: "https://news.un.org/en/tags/artificial-intelligence"
+    region: "Global"
+    tags: ["UN", "AI", "News"]
+    allow_substr: ["/en/story/"]
+    deny_substr: ["/audio/", "/video/", "/webcast/"]
+    max_links: 12
+
+  - name: "ISO — Insights (AI governance search)"
+    type: "html"
+    url: "https://www.iso.org/search.html?q=AI%20governance&srchCat=all"
+    region: "Global"
+    tags: ["ISO", "Insights", "AI governance"]
+    allow_substr: ["/insights/"]
+    max_links: 6
+
+  - name: "GlobalPolicyWatch — AI governance search"
+    type: "html"
+    url: "https://www.globalpolicywatch.com/?s=AI+governance"
+    region: "Global"
+    tags: ["Policy", "Blog", "AI governance"]
+    allow_substr: ["/"]
+    max_links: 6
+
+  - name: "TechPolicy.Press — AI governance search"
+    type: "html"
+    url: "https://techpolicy.press/?s=AI+governance"
+    region: "Global"
+    tags: ["Policy", "Media", "AI governance"]
+    allow_substr: ["/"]
+    deny_substr: ["/tag/"]
+    max_links: 6
+
+  # Keep but if it times out often, comment it out temporarily.
+  - name: "AI Journal — AI governance search (tight)"
+    type: "html"
+    url: "https://aijourn.com/?s=AI+governance"
+    region: "Global"
+    tags: ["Media", "AI", "Governance"]
+    allow_substr: ["/"]
+    max_links: 3
+
+  # arXiv — abs pages (no PDFs)
+  - name: "arXiv — AI governance search (abs only)"
+    type: "html"
+    url: "https://arxiv.org/search/?query=AI%20governance&searchtype=all"
+    region: "Global"
+    tags: ["Research", "AI governance"]
+    allow_substr: ["/abs/"]
+    pdf_chase: false
+    max_links: 5
+
+  # Nature — articles (AI governance)
+  - name: "Nature — AI governance search (articles)"
+    type: "html"
+    url: "https://www.nature.com/search?q=%22AI+governance%22"
+    region: "Global"
+    tags: ["Research", "AI governance"]
+    allow_substr: ["/articles/"]
+    deny_substr: ["/subjects/", "/collections/"]
+    pdf_chase: false
+    max_links: 5
+
+  - name: "EUR-Lex — Official Journal L (daily)"
+    type: "html"
+    url: "https://eur-lex.europa.eu/oj/direct-access.html?locale=en&ihmlang=en"
+    region: "EU"
+    tags: ["Official Journal"]
+    allow_substr: ["/legal-content/EN/TXT/"]
+    max_links: 12
+
+  - name: "European Commission — Press corner"
+    type: "html"
+    url: "https://ec.europa.eu/commission/presscorner/"
+    region: "EU"
+    tags: ["EU", "Press", "General"]
+    allow_substr: ["/detail/"]
+    max_links: 12
+
+
+
