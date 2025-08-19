@@ -59,7 +59,7 @@ async def run_digest_async(period_label: str):
         logger.info("7) Sending email …")
         subs = fetch_active_subscribers()
         to_list = [s["email"] for s in subs]
-        send_html_email(to_list, subject=f"Regulatory Digest — {period_label}", html=html)
+        send_html_email(to_list, subject=f"Regulatory Digest — Latest updates on AI", html=html)
 
         # 7) Per-subscriber delivery logs (audit trail)
         for s in subs:
