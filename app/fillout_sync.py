@@ -1,14 +1,30 @@
 # app/fillout_sync.py
 """
-Sync subscribers from Fillout with:
-- Pagination (limit/offset)
-- Incremental sync via afterDate (using app_state 'fillout_last_sync_iso')
-- Region fallback (US/EU)
-- Robust email extraction
+Sync subscribers from Fillout and process webhooks.
+
+Enhancements in this version:
+- Webhook payload unwrapping:
+    Accepts any of these shapes and extracts the *submission object*:
+
+    A) Plain submission object:
+       { "submissionId": "...", "questions": [ ... ], ... }
+
+    B) Newer wrapper (common):
+       { "formId": "...", "formName": "...", "submission": { ...submission... } }
+
+    C) Rare wrapper variant:
+       { "formId": "...", "formName": "...", "response": { ...submission... } }
+
+    D) Array-like (some custom relays):
+       { "responses": [ { ...submission... } ] }
+
+- Pagination + incremental sync (afterDate) for polling route
+- US/EU base fallback for polling route
+- Robust email extraction heuristics
 
 Docs:
-- Get all submissions: /forms/{formId}/submissions (limit 1..150, offset, afterDate, beforeDate)
-- Webhooks deliver the same shape as items in 'responses' array.
+- Get all submissions: /forms/{formId}/submissions (returns the 'responses' list; each entry is a submission object with questions[]). 
+- Webhooks: "receive submissions in the same format as entries in 'responses'"; Fillout also noted adding formId/formName to webhook payloads recently.
 """
 
 from __future__ import annotations
@@ -26,9 +42,14 @@ from .db import upsert_subscriber, get_state, set_state
 EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$", re.I)
 
 
+# ---------------------------
+# Helpers to extract answers
+# ---------------------------
+
 def _extract_email_from_submission(sub: dict) -> tuple[str | None, dict]:
     """
-    Heuristic to find an email and map a few other fields.
+    Find an email value inside a single *submission object*.
+    The submission object must contain 'questions': [{ id, name, type, value }, ...]
     Returns (email, answers_map)
     """
     questions = sub.get("questions", [])
@@ -53,7 +74,7 @@ def _extract_email_from_submission(sub: dict) -> tuple[str | None, dict]:
         if "email" in name and isinstance(v, str) and EMAIL_RE.match(v):
             return v, answers
 
-    # sometimes present at top-level
+    # sometimes present at top-level (depends on SSO/login forms)
     login = sub.get("login") or {}
     if isinstance(login, dict):
         v = login.get("email")
@@ -77,6 +98,10 @@ def _pick_label(answers: Dict[str, Any], *labels: str) -> str | None:
     return None
 
 
+# ---------------------------
+# Region handling for polling
+# ---------------------------
+
 def _candidate_bases() -> List[str]:
     prim = (settings.fillout_api_base or "https://api.fillout.com/v1/api").rstrip("/")
     us = "https://api.fillout.com/v1/api"
@@ -94,6 +119,10 @@ def _candidate_bases() -> List[str]:
     return out
 
 
+# ---------------------------
+# Polling (GET /submissions)
+# ---------------------------
+
 def _fetch_page(base: str, *, form_id: str, limit: int, offset: int, after_iso: Optional[str]) -> Tuple[Dict[str, Any] | None, str | None]:
     headers = {
         "Authorization": f"Bearer {settings.fillout_api_key}",
@@ -101,7 +130,8 @@ def _fetch_page(base: str, *, form_id: str, limit: int, offset: int, after_iso: 
     }
     params: Dict[str, Any] = {"limit": str(limit), "offset": str(offset)}
     if after_iso:
-        params["afterDate"] = after_iso  # ISO 8601 per Fillout docs
+        # Fillout requires ISO 8601 like 2024-05-16T23:20:05.324Z
+        params["afterDate"] = after_iso
     url = f"{base}/forms/{form_id}/submissions"
     try:
         with httpx.Client(timeout=30) as client:
@@ -117,6 +147,9 @@ def _fetch_page(base: str, *, form_id: str, limit: int, offset: int, after_iso: 
 
 
 def _upsert_from_submission(sub: dict) -> bool:
+    """
+    Given a *submission object*, extract an email and upsert the subscriber.
+    """
     email, answers = _extract_email_from_submission(sub)
     if not email:
         logger.warning("Submission without a usable email, skipping: {}", sub.get("submissionId"))
@@ -140,9 +173,8 @@ def _upsert_from_submission(sub: dict) -> bool:
 
 def sync_from_fillout() -> None:
     """
-    Incremental + paginated sync.
-    We read last sync iso from app_state['fillout_last_sync_iso'].
-    If empty, we fetch the first 1000 submissions in pages of 150 (hard cap).
+    Incremental + paginated sync when we poll:
+    reads last sync iso from app_state['fillout_last_sync_iso'].
     """
     last_iso = get_state("fillout_last_sync_iso")
     if last_iso:
@@ -152,7 +184,7 @@ def sync_from_fillout() -> None:
 
     bases = _candidate_bases()
     form_id = settings.fillout_form_id
-    page_limit = 150  # Fillout limit is 1..150
+    page_limit = 150  # API docs: 1..150
 
     total_upserted = 0
     for base in bases:
@@ -179,15 +211,10 @@ def sync_from_fillout() -> None:
             offset += page_limit
 
         if any_success:
-            # Successful base → stop trying other regions
-            if last_iso is None:
-                # Set a conservative last sync marker to "now-1m" to avoid missing submissions right at boundary
-                now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
-                set_state("fillout_last_sync_iso", now_iso)
-            else:
-                # Bump marker forward to now
-                now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
-                set_state("fillout_last_sync_iso", now_iso)
+            # Successful base → set 'now' as the new marker
+            now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            set_state("fillout_last_sync_iso", now_iso)
+
             if base != settings.fillout_api_base.rstrip("/"):
                 logger.warning("Fillout worked via fallback base {}. Consider setting FILLOUT_API_BASE to this value.", base)
             logger.info("Fillout sync complete. Upserted: {}", total_upserted)
@@ -199,16 +226,52 @@ def sync_from_fillout() -> None:
     )
 
 
-# ---- Webhook helper (used by /fillout-webhook) ----
+# ---------------------------
+# Webhook processing
+# ---------------------------
+
+def _unwrap_webhook_payload(payload: dict) -> dict | None:
+    """
+    Try to extract the *submission object* from various webhook shapes.
+    Returns the submission dict or None if not found.
+    """
+    if not isinstance(payload, dict):
+        return None
+
+    # Case A: already a submission object (has 'questions' and 'submissionId')
+    if "questions" in payload and ("submissionId" in payload or "submissionTime" in payload):
+        return payload
+
+    # Case B: common wrapper { formId, formName, submission: { ... } }
+    sub = payload.get("submission")
+    if isinstance(sub, dict) and "questions" in sub:
+        return sub
+
+    # Case C: rare wrapper { ..., response: { ... } }
+    resp = payload.get("response")
+    if isinstance(resp, dict) and "questions" in resp:
+        return resp
+
+    # Case D: { responses: [ { ... } ] }
+    resps = payload.get("responses")
+    if isinstance(resps, list) and resps and isinstance(resps[0], dict) and "questions" in resps[0]:
+        return resps[0]
+
+    # If nothing matched, return None for clear logging upstream
+    return None
+
 
 def process_webhook_payload(payload: dict) -> bool:
     """
-    Fillout says webhooks POST in the same shape as items in `responses`.
-    We just feed it through the same upsert logic.
-    Returns True if an email was upserted, else False.
+    Accept a Fillout webhook JSON payload and upsert one subscriber if possible.
+    Returns True iff an email was found and upserted.
     """
     try:
-        return _upsert_from_submission(payload)
+        sub = _unwrap_webhook_payload(payload)
+        if not sub:
+            logger.warning("Webhook payload did not contain a recognizable submission object. Keys seen: {}", list(payload.keys()))
+            return False
+        return _upsert_from_submission(sub)
     except Exception as e:
         logger.exception("Webhook processing failed: {}", e)
         return False
